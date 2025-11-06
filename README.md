@@ -12,5 +12,6 @@ Extraction steps:
 2. Unzip the archive to the /dataset directory:
 
   ```sh
-  unzip archive.zip -d dataset
+  mkdir -p data
+  unzip archive.zip -d data/raw
   ```
