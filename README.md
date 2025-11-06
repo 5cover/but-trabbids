@@ -2,6 +2,12 @@
 
 Analyse de données financières pour aide au trading semi-automatisé
 
+## Satistiques
+
+Nombre total de lignes: 28167857
+
+Calculé avec `find data/raw -type f -print0 | wc --files0-from=- -l`
+
 ## Liens
 
 [Dataset](https://www.kaggle.com/datasets/jacksoncrow/stock-market-dataset)

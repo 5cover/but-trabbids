@@ -1,6 +1,4 @@
-Oui, ton dataset NASDAQ colle très bien aux attentes du projet. Vous avez tout ce qu’il faut pour faire un vrai sujet “sérieux” sans faire du machine learning. On va transformer ce gros tas de CSV en projet propre, structuré, et prof-compatible.
-
-Je te propose un plan complet autour d’un sujet unique, plus une répartition claire pour Raphaël / Mattéo / Valentin.
+# Plan
 
 ## 1. Sujet & question décisionnelle
 
@@ -78,13 +76,11 @@ Quoi
 Comment
 
 1. Charger les CSV de chaque ticker sélectionné.
-2. Vérifier :
-
+2. Vérifier (même si normalement c'est bon, mais ça ne fait rien de mal):
    * dates manquantes,
    * doublons,
    * valeurs aberrantes (prix à 0, volume 0 sur des jours bizarres).
 3. Aligner les dates :
-
    * intersection des dates communes (tous les titres cotés ce jour),
    * ou bien autoriser des NaN mais ils seront gérés/filtrés ensuite.
 4. Calculer `return_t = (AdjClose_t / AdjClose_{t-1}) - 1` pour chaque titre.
