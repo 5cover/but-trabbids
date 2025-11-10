@@ -6,14 +6,16 @@
 #   * histogramme des volumes,
 #   * exemple de série de prix.
 
-from sys import stderr
+from csv import DictReader
+from pathlib import Path
 import pandas as pd
-import os
 
 from paths import ROOT
+from paths import DATA_PROCESSED, DATA_RAW
 
+N = 7
 
-meta = pd.read_csv(ROOT / "data/symbols_valid_meta.csv")
+meta = pd.read_csv(DATA_RAW / "symbols_valid_meta.csv")
 
 # Filtrage de base
 meta = meta[
@@ -23,26 +25,32 @@ meta = meta[
     & (meta["NextShares"] == "N")
 ]
 
+def sum_volume_fast(path: Path):
+    try:
+        with open(path, newline="") as f:
+            reader = DictReader(f)
+            return sum(int(row["Volume"]) for row in reader if row["Volume"])
+    except Exception:
+        return None
+
 # Calcul du volume total par symbole
 records = []
-for symbol in meta["Symbol"]:
-    path = ROOT / f"data/stocks/{symbol}.csv"
-    try:
-        df = pd.read_csv(path, usecols=["Volume"])
-        total_volume = df["Volume"].sum()
-        records.append((symbol, total_volume))
-    except Exception as e:
-        print(f'error reading {path}', e, file=stderr)
+for symbol, is_etf in meta[["Symbol", "ETF"]].values:
+    path = DATA_RAW / ('etfs' if is_etf == "Y" else 'stocks') / f'{symbol}.csv'
+    print('Processing', symbol)
+    df = pd.read_csv(path, usecols=["Volume"])
+    total_volume = df["Volume"].sum()
+    records.append((symbol, total_volume))
 
 volumes = pd.DataFrame(records, columns=["Symbol", "TotalVolume"])
 meta = meta.merge(volumes, on="Symbol", how="left")
 
-# Sélection 7 tickers par combinaison
+# Sélection N tickers par combinaison
 groups = (
-    meta.groupby(["Listing Exchange", "Market Category"])
-    .apply(lambda g: g.nlargest(7, "TotalVolume"))
+    meta.groupby(["Listing Exchange", "Market Category"], dropna=False)
+    .apply(lambda g: g.nlargest(N, "TotalVolume"))
     .reset_index(drop=True)
 )
 
-groups.to_csv("selected_tickers.csv", index=False)
+groups.to_csv(DATA_PROCESSED / "selected_tickers.csv", index=False)
 print(groups[["Listing Exchange", "Market Category", "Symbol", "TotalVolume"]])
