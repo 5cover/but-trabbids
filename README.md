@@ -2,6 +2,8 @@
 
 Analyse de données financières pour aide au trading semi-automatisé
 
+&copy; Mattéo Pfranger, Valentin Conchis, Raphaël Bardini &ndash; 2025
+
 ## Satistiques
 
 Nombre total de lignes: 28167857
