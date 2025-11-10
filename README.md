@@ -4,6 +4,15 @@ Analyse de données financières pour aide au trading semi-automatisé
 
 &copy; Mattéo Pfranger, Valentin Conchis, Raphaël Bardini &ndash; 2025
 
+## Setup rapide
+
+```sh
+# in project root
+python3 -m venv venv # Créer un environnement virtuel
+. venv/bin/activate # Activer l'environnement
+pip install -r requirements.txt
+```
+
 ## Satistiques
 
 Nombre total de lignes: 28167857
