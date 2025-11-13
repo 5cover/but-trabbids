@@ -25,7 +25,7 @@ Et toi tu connais Python, donc tu √©vites React / Vue / Next / astro / petits d√
 
 Structure minimale :
 
-```
+```text
 project/
   src/
     dashboard/
