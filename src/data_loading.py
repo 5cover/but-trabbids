@@ -19,9 +19,14 @@ meta = pd.read_csv(DATA_RAW / "symbols_valid_meta.csv")
 
 # Filtrage de base
 meta = meta[
+    # Toujours oui dans ce dataset
     (meta["Nasdaq Traded"] == "Y")
+    # Toujours non dans ce dataset
     & (meta["Test Issue"] == "N")
-    & (meta["Financial Status"] == "N")
+    # Que les normaux ou non spécifié. évite difficulté/défaillant
+    & (meta["Financial Status"].isna()) | (meta["Financial Status"] == "") | (meta["Financial Status"] == "N")
+
+    # Exclures les fonds semi-actifs
     & (meta["NextShares"] == "N")
 ]
 
@@ -33,10 +38,12 @@ def sum_volume_fast(path: Path):
     except Exception:
         return None
 
+
 # Calcul du volume total par symbole
 records = []
 for symbol, is_etf in meta[["Symbol", "ETF"]].values:
-    path = DATA_RAW / ('etfs' if is_etf == "Y" else 'stocks') / f'{symbol}.csv'
+    fname = symbol.replace('$','-').replace('.V','#')
+    path = DATA_RAW / ('etfs' if is_etf == "Y" else 'stocks') / f'{fname}.csv'
     print('Processing', symbol)
     df = pd.read_csv(path, usecols=["Volume"])
     total_volume = df["Volume"].sum()

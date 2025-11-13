@@ -281,10 +281,10 @@ Responsable de :
 * Étape 1 & 2 principalement.
 * Scripts pour :
 
-  * lire tous les CSV,
-  * filtrer les tickers (liquidité, dates complètes),
-  * calculer les rendements journaliers,
-  * sortir un fichier propre `returns.parquet` ou `returns.csv`.
+  [x] lire tous les CSV,
+  [x] filtrer les tickers (liquidité, dates complètes),
+  [x] calculer les rendements journaliers,
+  [x] sortir un fichier propre `returns.parquet` ou `returns.csv`.
 * Un petit notebook “Exploration data / Nettoyage” avec :
 
   * histogramme des volumes,
