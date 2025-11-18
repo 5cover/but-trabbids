@@ -125,10 +125,21 @@ Le point orange indique le portefeuille actuellement optimisé (selon le mode �
 
 En résumé, le diagramme illustre la relation “plus on veut de rendement, plus on doit accepter de risque”, tout en montrant que la diversification permet de se déplacer vers le haut/gauche (meilleur compromis) par rapport aux titres bruts.
 
-#### Backtest Jan–Mars 2020**
+#### Backtest Jan–Mars 2020
 
-- Courbes base 100 comparant trois stratégies : (1) portefeuille optimisé (poids calculés), (2) portefeuille égalitaire (chaque ticker = 1/n), (3) benchmark historique (QQQ ou premier ticker si QQQ absent).
-- Lecture : regardez les écarts pendant la mini-crise de mars 2020. Si la courbe optimisée chute moins ou remonte plus vite que l’égalitaire, cela valide la diversification / objectif choisi. Si elle fait pire, soulignez les limites (modèle calibré sur tout 2010‑2020, pas spécifiquement sur la crise).
+- Courbes base 100 comparant trois stratégies :
+  1. **Optimisé** : les poids issus de l’optimisation courante.
+  2. **Égalitaire** : même sélection mais chaque titre à 1/n (contrôle “naïf”).
+  3. **Benchmark** : QQQ (ou premier ticker s’il n’est pas disponible) qui sert de proxy marché.
+- Interprétation détaillée :
+  - **Point de départ (100)** : toutes les trajectoires démarrent ensemble, ce qui facilite la comparaison.
+  - **Phase de baisse (fin fév. → mars 2020)** : regardez si la courbe optimisée descend moins brutalement que l’égalitaire ou le benchmark. Cela montre l’effet de la diversification / du cap.
+  - **Phase de rebond** : une courbe qui remonte plus vite indique que l’allocation est mieux positionnée pour profiter du retour à la normale.
+  - **Écart final** : la distance verticale fin mars quantifie le sur‑ ou sous‑performance de la stratégie proposée. Mentionnez-la explicitement pendant l’oral.
+- Message clé :
+  - Si la courbe optimisée est **au-dessus** des deux autres → “notre portefeuille a mieux traversé la crise (drawdown plus faible / meilleur rebond)”.
+  - Si elle est **équivalente** → “dans une crise homogène type Covid, tout baisse en même temps; il faut rappeler les limites du modèle (basé sur 2010‑2020)”.
+  - Si elle est **en dessous** → “objectif trop agressif ou tickers trop corrélés; on peut réduire le rendement cible, remonter le cap ou changer la sélection pour montrer la sensibilité”.
 
 #### Message “Optimisation impossible: Optimisation échouée (infeasible).
 

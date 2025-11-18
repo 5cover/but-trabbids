@@ -45,7 +45,6 @@ Contenu:
 
 ### 3.2 schéma
 
-
 | Colonne              | Signification                                                                                                                                                                                  | Exemple                       | Utile pour l'analyse ?                                |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------- |
 | **Nasdaq Traded**    | Indique si le titre est coté sur le NASDAQ (`Y` = oui). Certains fichiers contiennent aussi des titres d’autres marchés (AMEX, NYSE).                                                          | `Y`                           | Oui, filtre de base (`Y` uniquement).                 |
