@@ -96,23 +96,45 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
 
 ### 3.7 Résultats de l’optimisation
 
-- **Bar chart des poids** : lisible instantanément (valeurs arrondies en %).  
-  - Le titre du graphique rappelle le cap choisi (ex : “cap 35 %”). Si une barre touche cette limite, c’est que le solveur la “pousse” au maximum autorisé.
-- **Cartes KPI** :  
-  - Rendement annualisé attendu du portefeuille.
-  - Volatilité annualisée (le “risque global”).
-  - Ratio µ/σ du portefeuille.
-- **Frontière efficiente** :
-  - Ligne bleue = série de portefeuilles calculés sur une grille de rendements cibles (par ex. 10 %, 20 %, …). Chaque point représente la variance minimale atteignable sous le cap de poids choisi.
-  - Points gris = titres individuels (volatilité vs rendement) → utile pour rappeler que certains titres sont “dominé” même avant optimisation.
-  - Point orange = portefeuille optimisé courant (soit variance min, soit cible). Pendant l’oral, insistez sur la comparaison : “notre portefeuille (orange) offre X % de rendement pour Y % de risque, mieux que n’importe quel titre pris isolément”.
-- **Backtest Jan–Mars 2020** :
-  - Courbes base 100 comparant trois stratégies : (1) portefeuille optimisé (poids calculés), (2) portefeuille égalitaire (chaque ticker = 1/n), (3) benchmark historique (QQQ ou premier ticker si QQQ absent).
-  - Lecture : regardez les écarts pendant la mini-crise de mars 2020. Si la courbe optimisée chute moins ou remonte plus vite que l’égalitaire, cela valide la diversification / objectif choisi. Si elle fait pire, soulignez les limites (modèle calibré sur tout 2010‑2020, pas spécifiquement sur la crise).
-- **Message “Optimisation impossible: Optimisation échouée (infeasible).”** :
-  - Pourquoi ? Les contraintes n’ont pas de solution (ex : un seul ticker sélectionné avec limite 35 %, ou un rendement cible irréaliste de 80 % sur des titres prudents). Le solveur Clarabel signale alors que le problème est “infeasible”.
-  - Que faire ? (1) Ajouter au moins deux tickers pour que le modèle puisse diversifier. (2) Abaisser le slider de rendement cible jusqu’à ~10‑20 %. (3) En dernier recours, relâcher la contrainte de poids max dans `analysis.py` si vous assumez un portefeuille très concentré.
-  - En pratique : le dashboard affiche des graphiques vides + le message d’avertissement. Ajustez la sélection/slider puis cliquez à nouveau sur “Optimiser”.
+#### Bar chart des poids
+
+- lisible instantanément (valeurs arrondies en %).  
+- Le titre du graphique rappelle le cap choisi (ex : “cap 35 %”). Si une barre touche cette limite, c’est que le solveur la “pousse” au maximum autorisé.
+
+#### Cartes KPI
+
+- Rendement annualisé attendu du portefeuille.
+- Volatilité annualisée (le “risque global”).
+- Ratio µ/σ du portefeuille.
+
+#### Frontière efficiente
+
+- Ligne bleue = série de portefeuilles calculés sur une grille de rendements cibles (par ex. 10 %, 20 %, …). Chaque point représente la variance minimale atteignable sous le cap de poids choisi.
+- Points gris = titres individuels (volatilité vs rendement) → utile pour rappeler que certains titres sont “dominé” même avant optimisation.
+- Point orange = portefeuille optimisé courant (soit variance min, soit cible). Pendant l’oral, insistez sur la comparaison : “notre portefeuille (orange) offre X % de rendement pour Y % de risque, mieux que n’importe quel titre pris isolément”.
+
+##### Interprétation du diagramme
+
+La ligne bleue n’est pas un simple tracé décoratif : elle relie les portefeuilles optimaux calculés pour une série de rendements cibles. Concrètement, on prend les mêmes tickers sélectionnés, on fixe un objectif de rendement annualisé (ex. 10 %, 15 %, 20 %, …) et, pour chacun, on résout un problème de Markowitz “minimiser la variance sous ce rendement et avec la limite de poids”. On obtient donc plusieurs points (σ, µ) représentant la meilleure combinaison possible pour chaque objectif. Comme ces points sont calculés sur une grille monotone, on peut les relier et obtenir une courbe continue : c’est la frontière efficiente.
+
+Chaque point gris est un titre pris isolément (son risque annuel sur l’axe X, son rendement annuel sur l’axe Y). Ils servent de repère.
+
+La ligne bleue montre les portefeuilles “efficients” : pour n’importe quel rendement visé, aucun autre portefeuille (respectant les mêmes contraintes) ne peut offrir moins de volatilité. Visualiser cette ligne permet d’expliquer que combiner plusieurs titres peut dépasser le couple rendement/risque de chaque titre individuel.
+
+Le point orange indique le portefeuille actuellement optimisé (selon le mode “Variance minimale” ou “Cible rendement”). Le message clé à l’oral est “notre portefeuille (orange) se situe sur la frontière bleue, donc il est optimal pour l’objectif choisi, et il offre un couple rendement/risque meilleur que chacun des titres gris pris isolément”.
+
+En résumé, le diagramme illustre la relation “plus on veut de rendement, plus on doit accepter de risque”, tout en montrant que la diversification permet de se déplacer vers le haut/gauche (meilleur compromis) par rapport aux titres bruts.
+
+#### Backtest Jan–Mars 2020**
+
+- Courbes base 100 comparant trois stratégies : (1) portefeuille optimisé (poids calculés), (2) portefeuille égalitaire (chaque ticker = 1/n), (3) benchmark historique (QQQ ou premier ticker si QQQ absent).
+- Lecture : regardez les écarts pendant la mini-crise de mars 2020. Si la courbe optimisée chute moins ou remonte plus vite que l’égalitaire, cela valide la diversification / objectif choisi. Si elle fait pire, soulignez les limites (modèle calibré sur tout 2010‑2020, pas spécifiquement sur la crise).
+
+#### Message “Optimisation impossible: Optimisation échouée (infeasible).
+
+- Pourquoi ? Les contraintes n’ont pas de solution (ex : un seul ticker sélectionné avec limite 35 %, ou un rendement cible irréaliste de 80 % sur des titres prudents). Le solveur Clarabel signale alors que le problème est “infeasible”.
+- Que faire ? (1) Ajouter au moins deux tickers pour que le modèle puisse diversifier. (2) Abaisser le slider de rendement cible jusqu’à ~10‑20 %. (3) En dernier recours, relâcher la contrainte de poids max dans `analysis.py` si vous assumez un portefeuille très concentré.
+- En pratique : le dashboard affiche des graphiques vides + le message d’avertissement. Ajustez la sélection/slider puis cliquez à nouveau sur “Optimiser”.
 
 ## 4. Lecture rapide pour l’oral
 
