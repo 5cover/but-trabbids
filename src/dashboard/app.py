@@ -45,7 +45,7 @@ def format_info(symbols: List[str], stats: pd.DataFrame) -> str:
     end = stats["end_date"].max()
     return (
         f"{len(symbols)} titres sélectionnés · Période {start} → {end} · "
-        "Source : NASDAQ (Kaggle) · Méthode : volume × catégorie"
+        "Source : NASDAQ (Kaggle) · Méthode : volume x catégorie"
     )
 
 
@@ -275,7 +275,7 @@ def build_backtest_figure(symbols: List[str], weights: pd.Series) -> go.Figure:
             )
         )
     fig.update_layout(
-        title="Backtest Jan–Mars 2020 (indice base 100)",
+        title="Backtest Jan-Mars 2020 (indice base 100)",
         template="plotly_white",
         yaxis_title="Indice (base 100)",
     )
@@ -296,10 +296,10 @@ server = app.server
 
 app.layout = html.Div(
     [
-        html.H1("Portefeuille NASDAQ pré‑Covid"),
+        html.H1("Portefeuille NASDAQ pré-Covid"),
         html.P(
             "Sélectionnez jusqu'à cinq actions/ETF pour explorer les métriques, "
-            "les corrélations et optimiser votre portefeuille moyenne‑variance.",
+            "les corrélations et optimiser votre portefeuille moyenne-variance.",
             className="subtitle",
         ),
         html.Div(
