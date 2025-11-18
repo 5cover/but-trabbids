@@ -16,6 +16,7 @@ from src import analysis
 
 MAX_TICKERS = 5
 GRAPH_HEIGHT = 420
+DEFAULT_MAX_WEIGHT = 0.35
 DEFAULT_SYMBOLS = ["AAPL", "QQQ", "TQQQ"]
 BACKTEST_START = pd.Timestamp("2020-01-02")
 BACKTEST_END = pd.Timestamp("2020-03-31")
@@ -25,8 +26,25 @@ RETURNS_WIDE = analysis.load_returns_wide()
 SELECTION = analysis.load_selection()
 ALL_STATS = analysis.compute_descriptive_stats()
 
+COLOR_SEQUENCE = (
+    px.colors.qualitative.D3
+    + px.colors.qualitative.Safe
+    + px.colors.qualitative.Dark24
+    + px.colors.qualitative.Plotly
+)
+DEFAULT_COLOR = "#636EFA"
+SYMBOL_COLOR_MAP = {
+    symbol: COLOR_SEQUENCE[i % len(COLOR_SEQUENCE)]
+    for i, symbol in enumerate(SELECTION["Symbol"].tolist())
+}
 
-def sanitize_selection(selected: List[str] | None) -> List[str]:
+
+def color_map_for(symbols: List[str]) -> dict:
+    mapping = {symbol: SYMBOL_COLOR_MAP.get(symbol, DEFAULT_COLOR) for symbol in symbols}
+    return mapping
+
+
+def sanitize_selection(selected: List[str] | None):
     symbols: List[str] = []
     for symbol in (selected or []):
         symbol = symbol.upper()
@@ -56,6 +74,7 @@ def build_price_figure(symbols: List[str], mode: str) -> go.Figure:
         return go.Figure()
     y_col = "Adj Close" if mode == "price" else "Normalized"
     title = "Prix ajustés" if mode == "price" else "Indices base 100"
+    color_map = color_map_for(symbols)
     fig = px.line(
         data,
         x="Date",
@@ -64,6 +83,8 @@ def build_price_figure(symbols: List[str], mode: str) -> go.Figure:
         hover_data={"SecurityName": True},
         template="plotly_white",
         title=title,
+        color_discrete_map=color_map,
+        category_orders={"Symbol": symbols},
     )
     fig.update_layout(legend_title_text="Ticker")
     if mode == "price":
@@ -73,7 +94,7 @@ def build_price_figure(symbols: List[str], mode: str) -> go.Figure:
     return fig
 
 
-def stats_table_columns() -> List[dict]:
+def stats_table_columns():
     return [
         {"name": "Ticker", "id": "Symbol"},
         {"name": "Nom", "id": "Security Name"},
@@ -116,6 +137,7 @@ def build_risk_scatter(stats: pd.DataFrame) -> go.Figure:
     df["Risque (%)"] = df["vol_annual"] * 100
     # Garanti que la taille des marqueurs reste positive même si le ratio µ/σ est négatif.
     df["Taille"] = df["return_risk_ratio"].clip(lower=0).fillna(0) + 0.1
+    symbols = df["Symbol"].unique().tolist()
     fig = px.scatter(
         df,
         x="Risque (%)",
@@ -123,9 +145,12 @@ def build_risk_scatter(stats: pd.DataFrame) -> go.Figure:
         size="Taille",
         color="Symbol",
         hover_name="Security Name",
+        text="Symbol",
         template="plotly_white",
+        color_discrete_map=color_map_for(symbols),
+        category_orders={"Symbol": symbols},
     )
-    fig.update_traces(mode="markers+text", text=df["Symbol"], textposition="top center")
+    fig.update_traces(mode="markers+text", textposition="top center")
     fig.update_layout(title="Nuage risque vs rendement", showlegend=False)
     return fig
 
@@ -152,7 +177,9 @@ def build_corr_heatmap(symbols: List[str]) -> go.Figure:
     return fig
 
 
-def build_weights_chart(solution: analysis.PortfolioSolution) -> go.Figure:
+def build_weights_chart(
+    solution: analysis.PortfolioSolution, max_weight: float
+) -> go.Figure:
     df = solution.weights.reset_index()
     df.columns = ["Symbol", "Weight"]
     fig = px.bar(
@@ -161,10 +188,12 @@ def build_weights_chart(solution: analysis.PortfolioSolution) -> go.Figure:
         y="Weight",
         text="Weight",
         template="plotly_white",
-        title="Poids du portefeuille",
+        title=f"Poids du portefeuille (cap {max_weight:.0%})",
     )
     fig.update_traces(texttemplate="%{text:.1%}")
     fig.update_yaxes(tickformat=".0%", range=[0, min(1, df["Weight"].max() * 1.2)])
+    colors = df["Symbol"].map(SYMBOL_COLOR_MAP).fillna(DEFAULT_COLOR)
+    fig.update_traces(marker_color=colors)
     return fig
 
 
@@ -190,8 +219,9 @@ def build_frontier_figure(
     solution: analysis.PortfolioSolution,
     stats: pd.DataFrame,
     model: analysis.MarkowitzModel,
+    max_weight: float,
 ) -> go.Figure:
-    frontier = model.efficient_frontier()
+    frontier = model.efficient_frontier(max_weight=max_weight)
     if not frontier:
         return go.Figure()
 
@@ -373,6 +403,26 @@ app.layout = html.Div(
                             ],
                             className="control-block",
                         ),
+                        html.Div(
+                            [
+                                html.Span("Poids max par titre"),
+                                dcc.Slider(
+                                    id="max-weight-slider",
+                                    min=0.2,
+                                    max=1.0,
+                                    step=0.05,
+                                    value=DEFAULT_MAX_WEIGHT,
+                                    marks={
+                                        0.2: "20%",
+                                        0.35: "35%",
+                                        0.5: "50%",
+                                        0.75: "75%",
+                                        1.0: "100%",
+                                    },
+                                ),
+                            ],
+                            className="control-block",
+                        ),
                         html.Button("Optimiser", id="optimize-button", className="primary"),
                     ],
                     className="controls-grid",
@@ -382,6 +432,7 @@ app.layout = html.Div(
         ),
         html.Div(id="warning-banner", className="warning"),
         html.Div(id="selection-info", className="selection-info"),
+        html.Div(id="portfolio-metrics", className="metric-strip"),
         html.Div(
             [
                 dcc.Graph(
@@ -422,7 +473,6 @@ app.layout = html.Div(
                     className="card",
                     style={"height": f"{GRAPH_HEIGHT}px"},
                 ),
-                html.Div(id="portfolio-metrics", className="card metrics-card"),
             ],
             className="grid two",
         ),
@@ -461,9 +511,10 @@ app.layout = html.Div(
     Input("price-mode", "value"),
     Input("portfolio-mode", "value"),
     Input("target-return-slider", "value"),
+    Input("max-weight-slider", "value"),
     Input("optimize-button", "n_clicks"),
 )
-def update_dashboard(selected, price_mode, mode, target_return, _):
+def update_dashboard(selected, price_mode, mode, target_return, max_weight, _):
     symbols, warning = sanitize_selection(selected)
     stats = analysis.compute_descriptive_stats(symbols)
     price_fig = build_price_figure(symbols, price_mode)
@@ -474,9 +525,12 @@ def update_dashboard(selected, price_mode, mode, target_return, _):
     try:
         model = analysis.MarkowitzModel.from_symbols(symbols)
         if mode == "min":
-            solution = model.minimum_variance()
+            solution = model.minimum_variance(max_weight=max_weight)
         else:
-            solution = model.optimize(target_annual_return=target_return)
+            solution = model.optimize(
+                target_annual_return=target_return,
+                max_weight=max_weight,
+            )
     except Exception as exc:  # pragma: no cover - affichage utilisateur
         warning = f"{warning} Optimisation impossible: {exc}"
         empty_fig = go.Figure()
@@ -493,9 +547,11 @@ def update_dashboard(selected, price_mode, mode, target_return, _):
             warning,
         )
 
-    weights_fig = build_weights_chart(solution)
+    weights_fig = build_weights_chart(solution, max_weight)
     metrics = build_metrics(solution)
-    frontier_fig = build_frontier_figure(solution, stats, model)
+    frontier_fig = build_frontier_figure(
+        solution, stats, model, max_weight=max_weight
+    )
     backtest_fig = build_backtest_figure(symbols, solution.weights)
 
     return (
@@ -510,6 +566,14 @@ def update_dashboard(selected, price_mode, mode, target_return, _):
         backtest_fig,
         warning,
     )
+
+
+@callback(
+    Output("target-return-slider", "disabled"),
+    Input("portfolio-mode", "value"),
+)
+def toggle_target_slider(mode: str) -> bool:
+    return mode == "min"
 
 
 if __name__ == "__main__":

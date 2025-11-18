@@ -20,6 +20,12 @@ Pourquoi:
 - Explicable et interprétable
 - Performant à calculer
 
+Donc:
+
+- analyse purement statistique
+- évaluation et optimisation de positions boursières
+- le trader garde la main. le programme informe.
+
 ## 3 Méthodologie et traitement des données
 
 ### 3.1 Dataset

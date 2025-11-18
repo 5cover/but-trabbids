@@ -66,6 +66,19 @@ h1 {
   margin-top: 8px;
 }
 
+.metric-strip {
+  margin: 12px 0 4px;
+  padding: 0;
+}
+
+.metric-strip .metric-grid {
+  margin: 0;
+}
+
+.metric-strip .metric-card {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
 .warning {
   color: #b45309;
   margin-top: 8px;

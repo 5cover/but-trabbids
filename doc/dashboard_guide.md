@@ -2,8 +2,6 @@
 
 Ce document sert de porte d’entrée pour toute personne qui rejoint le projet en dernière minute. Il retrace le pipeline d’analyse, résume les indicateurs que nous calculons et explique comment lire le tableau de bord Dash même si vous avez peu de notions financières.
 
----
-
 ## 1. Vue d’ensemble du pipeline
 
 | Étape                        | Script                                      | Pourquoi ?                                                                                                   | Fichiers produits                                                |
@@ -15,8 +13,6 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
 | Tableau de bord              | `python -m src.dashboard.app`               | Montrer visuellement prix, stats, corrélations et optimisation en direct pendant l’oral                      | Serveur Dash (port 8050)                                         |
 
 > **Astuce onboarding** : si un fichier manque, relancez simplement les modules ci-dessus dans l’ordre. Ils s’appuient tous sur `src/paths.py`, donc exécutez-les depuis la racine du projet.
-
----
 
 ## 2. Comprendre les métriques clés
 
@@ -46,10 +42,8 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
 
 ### Poids du portefeuille
 
-- Contraintes : somme = 1 (100 % du capital), poids ≥ 0 (pas de ventes à découvert), cap de 35 % par titre pour éviter la concentration.
+- Contraintes : somme = 1 (100 % du capital), poids ≥ 0 (pas de ventes à découvert), cap de 35 % (configurable) par titre pour éviter la concentration.
 - Calculés par `cvxpy` en minimisant la variance ou en atteignant un rendement cible.
-
----
 
 ## 3. Ce que montre le Dashboard et comment le lire
 
@@ -83,6 +77,7 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
   - Points en haut/gauche : combinaison rare (rendement élevé pour risque modéré).
   - Points très à droite : titres volatils (ex : TQQQ).
   - Points dominés : si un autre titre fait mieux sur les deux axes, inutile de le garder.
+- Taille des points : proportionnelle au ratio µ/σ mais toujours positive (on clippe les ratios négatifs et on ajoute un mini-offset). Un gros disque = titre historiquement “efficace” (µ élevé relativement à son risque). Un disque minuscule = ratio ≤ 0 → le titre n’a pas compensé sa volatilité, à mentionner pendant l’oral.
 
 ### 3.5 Matrice de corrélation
 
@@ -95,26 +90,29 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
 - **Mode portefeuille** :
   - *Variance minimale* : minimise le risque sans contrainte de rendement.
   - *Cible rendement* : impose un µ annualisé (slider) puis trouve la variance minimale possible.
-- **Slider** : fixé par défaut à 20 % annuel, mais vous pouvez tester 30 %, 40 % pour montrer l’impact sur les poids.
+- **Slider rendement** : fixé par défaut à 20 % annuel, mais vous pouvez tester 30 %, 40 % pour montrer l’impact sur les poids. Il se grise automatiquement si vous passez en mode “Variance minimale” (puisqu’il n’est pas utilisé).
+- **Poids max par titre** : slider dédié (20 % → 100 %). 35 % par défaut = “pas plus d’un tiers du capital sur un seul actif”. Abaisser ce cap force la diversification, l’augmenter montre ce qui se passe avec un portefeuille plus concentré.
 - **Bouton “Optimiser”** : force le recalcul (utile pendant l’oral pour rythmer le discours).
 
 ### 3.7 Résultats de l’optimisation
 
 - **Bar chart des poids** : lisible instantanément (valeurs arrondies en %).  
-  - Si un titre atteint 35 %, c’est que le solveur le “pousse” au maximum autorisé.
+  - Le titre du graphique rappelle le cap choisi (ex : “cap 35 %”). Si une barre touche cette limite, c’est que le solveur la “pousse” au maximum autorisé.
 - **Cartes KPI** :  
   - Rendement annualisé attendu du portefeuille.
   - Volatilité annualisée (le “risque global”).
   - Ratio µ/σ du portefeuille.
 - **Frontière efficiente** :
-  - Ligne bleue = meilleure combinaison rendement/risque pour chaque niveau de rendement visé.
-  - Points gris = titres individuels (on montre que combiner plusieurs titres peut être plus efficace qu’un seul).
-  - Point orange = portefeuille optimisé courant.
+  - Ligne bleue = série de portefeuilles calculés sur une grille de rendements cibles (par ex. 10 %, 20 %, …). Chaque point représente la variance minimale atteignable sous le cap de poids choisi.
+  - Points gris = titres individuels (volatilité vs rendement) → utile pour rappeler que certains titres sont “dominé” même avant optimisation.
+  - Point orange = portefeuille optimisé courant (soit variance min, soit cible). Pendant l’oral, insistez sur la comparaison : “notre portefeuille (orange) offre X % de rendement pour Y % de risque, mieux que n’importe quel titre pris isolément”.
 - **Backtest Jan–Mars 2020** :
-  - Courbes base 100 pour comparer : portefeuille optimisé, portefeuille égalitaire (chaque titre 1/n), benchmark QQQ (ou 1er ticker).
-  - But : visualiser comment l’allocation résiste aux turbulences juste avant/après le “choc Covid”.
-
----
+  - Courbes base 100 comparant trois stratégies : (1) portefeuille optimisé (poids calculés), (2) portefeuille égalitaire (chaque ticker = 1/n), (3) benchmark historique (QQQ ou premier ticker si QQQ absent).
+  - Lecture : regardez les écarts pendant la mini-crise de mars 2020. Si la courbe optimisée chute moins ou remonte plus vite que l’égalitaire, cela valide la diversification / objectif choisi. Si elle fait pire, soulignez les limites (modèle calibré sur tout 2010‑2020, pas spécifiquement sur la crise).
+- **Message “Optimisation impossible: Optimisation échouée (infeasible).”** :
+  - Pourquoi ? Les contraintes n’ont pas de solution (ex : un seul ticker sélectionné avec limite 35 %, ou un rendement cible irréaliste de 80 % sur des titres prudents). Le solveur Clarabel signale alors que le problème est “infeasible”.
+  - Que faire ? (1) Ajouter au moins deux tickers pour que le modèle puisse diversifier. (2) Abaisser le slider de rendement cible jusqu’à ~10‑20 %. (3) En dernier recours, relâcher la contrainte de poids max dans `analysis.py` si vous assumez un portefeuille très concentré.
+  - En pratique : le dashboard affiche des graphiques vides + le message d’avertissement. Ajustez la sélection/slider puis cliquez à nouveau sur “Optimiser”.
 
 ## 4. Lecture rapide pour l’oral
 
@@ -123,8 +121,6 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
 3. **Exploration** : “À gauche, les prix/rendements cumulés; en dessous, le tableau KPI pour hiérarchiser les titres; à droite les corrélations.”
 4. **Décision** : “Via ce slider on fixe un rendement cible; la barre des poids et les cartes nous donnent la recommandation; la frontière montre pourquoi c’est optimal; le backtest vérifie la robustesse juste avant avril 2020.”
 5. **Interprétation simple** : “Si le ratio µ/σ > 1 et que les corrélations sont modérées, on obtient un portefeuille équilibré. Sinon, on réduit l’objectif ou on retire les titres trop volatils.”
-
----
 
 ## 5. FAQ rapide
 
@@ -135,8 +131,6 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
 | “Le ratio µ/σ peut-il être >10 ?”             | Oui pour des titres très spéculatifs (ex : small caps). C’est un signal d’alerte : vérifier la liquidité et éventuellement exclure ces cas lors de l’interprétation.         |
 | “Comment justifier la période 2010–2020 ?”    | L’investisseur voulait une décision avant la crise Covid, donc on coupe au 1ᵉʳ avril 2020 pour ne pas introduire d’information future.                                       |
 | “Puis-je changer les contraintes ?”           | Oui, la classe `MarkowitzModel` accepte `allow_short` et `max_weight`. Si vous autorisez des ventes à découvert, adaptez l’argumentaire (plus complexe à expliquer au jury). |
-
----
 
 ## 6. Ressources complémentaires
 
