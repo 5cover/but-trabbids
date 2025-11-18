@@ -15,6 +15,7 @@ from dash.dash_table.Format import Format
 from src import analysis
 
 MAX_TICKERS = 5
+GRAPH_HEIGHT = 420
 DEFAULT_SYMBOLS = ["AAPL", "QQQ", "TQQQ"]
 BACKTEST_START = pd.Timestamp("2020-01-02")
 BACKTEST_END = pd.Timestamp("2020-03-31")
@@ -113,11 +114,13 @@ def build_risk_scatter(stats: pd.DataFrame) -> go.Figure:
     df = stats.copy()
     df["Rendement (%)"] = df["mean_annual_return"] * 100
     df["Risque (%)"] = df["vol_annual"] * 100
+    # Garanti que la taille des marqueurs reste positive même si le ratio µ/σ est négatif.
+    df["Taille"] = df["return_risk_ratio"].clip(lower=0).fillna(0) + 0.1
     fig = px.scatter(
         df,
         x="Risque (%)",
         y="Rendement (%)",
-        size="return_risk_ratio",
+        size="Taille",
         color="Symbol",
         hover_name="Security Name",
         template="plotly_white",
@@ -232,7 +235,13 @@ def build_frontier_figure(
         xaxis_title="Risque annualisé",
         yaxis_title="Rendement annualisé",
         template="plotly_white",
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.35,
+            xanchor="center",
+            x=0.5,
+        ),
     )
     fig.update_yaxes(tickformat=".0%")
     fig.update_xaxes(tickformat=".0%")
@@ -375,7 +384,11 @@ app.layout = html.Div(
         html.Div(id="selection-info", className="selection-info"),
         html.Div(
             [
-                dcc.Graph(id="price-graph", className="card"),
+                dcc.Graph(
+                    id="price-graph",
+                    className="card",
+                    style={"height": f"{GRAPH_HEIGHT}px"},
+                ),
                 dash_table.DataTable(
                     id="stats-table",
                     columns=stats_table_columns(),
@@ -389,22 +402,42 @@ app.layout = html.Div(
         ),
         html.Div(
             [
-                dcc.Graph(id="risk-graph", className="card"),
-                dcc.Graph(id="correlation-graph", className="card"),
+                dcc.Graph(
+                    id="risk-graph",
+                    className="card",
+                    style={"height": f"{GRAPH_HEIGHT}px"},
+                ),
+                dcc.Graph(
+                    id="correlation-graph",
+                    className="card",
+                    style={"height": f"{GRAPH_HEIGHT}px"},
+                ),
             ],
             className="grid two",
         ),
         html.Div(
             [
-                dcc.Graph(id="weights-graph", className="card"),
+                dcc.Graph(
+                    id="weights-graph",
+                    className="card",
+                    style={"height": f"{GRAPH_HEIGHT}px"},
+                ),
                 html.Div(id="portfolio-metrics", className="card metrics-card"),
             ],
             className="grid two",
         ),
         html.Div(
             [
-                dcc.Graph(id="frontier-graph", className="card"),
-                dcc.Graph(id="backtest-graph", className="card"),
+                dcc.Graph(
+                    id="frontier-graph",
+                    className="card",
+                    style={"height": f"{GRAPH_HEIGHT}px"},
+                ),
+                dcc.Graph(
+                    id="backtest-graph",
+                    className="card",
+                    style={"height": f"{GRAPH_HEIGHT}px"},
+                ),
             ],
             className="grid two",
         ),
