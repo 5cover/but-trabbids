@@ -1,36 +1,43 @@
-"""Selection de l'univers de titres à partir des métadonnées Kaggle.
+"""Pipeline unique pour générer toutes les données nécessaires au dashboard.
 
-Ce module filtre les tickers NASDAQ, calcule des métriques de liquidité et
-conserve les combinaisons les plus actives pour alimenter le reste du projet.
+Étapes exécutées séquentiellement :
+1. Sélection de l'univers de titres (metadata Nasdaq)
+2. Construction des historiques prix/rendements pour 2010-01-04 → 2020-04-01
+3. Calcul des statistiques descriptives (résumés + corrélations)
+
+Commande unique : `python -m src.data_loading`
 """
 
 from __future__ import annotations
 
 import argparse
-import logging
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from pandas import Timestamp
 
-from .paths import DATA_PROCESSED, DATA_RAW
+try:  # pragma: no cover
+    from . import analysis
+    from .paths import DATA_PROCESSED, DATA_RAW
+except ImportError:  # pragma: no cover
+    from src import analysis
+    from paths import DATA_PROCESSED, DATA_RAW
 
 
-logger = logging.getLogger(__name__)
-
-
+DEFAULT_START_DATE = Timestamp("2010-01-01")
 DEFAULT_END_DATE = Timestamp("2020-04-01")
-DEFAULT_MIN_TRADING_DAYS = 252 * 3  # 3 années boursières de données utiles
+DEFAULT_MIN_TRADING_DAYS = 252 * 3  # 3 ans utiles
 DEFAULT_TOP_PER_BUCKET = 7
 DEFAULT_MAX_SYMBOLS = 49
-PROGRESS_BATCH_SIZE = 100
 
 
 @dataclass
-class SymbolSelection:
-    """Résumé du profil de trading d'un ticker."""
-
+class SymbolProfile:
+    symbol: str
+    is_etf: bool
     data_file: str
     total_volume: float
     average_volume: float
@@ -38,8 +45,9 @@ class SymbolSelection:
     first_date: Timestamp
     last_date: Timestamp
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, object]:
         return {
+            "Symbol": self.symbol,
             "DataFile": self.data_file,
             "TotalVolume": self.total_volume,
             "AverageVolume": self.average_volume,
@@ -51,36 +59,35 @@ class SymbolSelection:
 
 def _candidate_filenames(symbol: str) -> Iterable[str]:
     upper = symbol.strip().upper()
-    candidates = {
+    yield from {
         upper,
         upper.replace(".", "-"),
         upper.replace(".", ""),
         upper.replace("$", "-"),
         upper.replace("/", "-"),
     }
-    return candidates
 
 
-def symbol_path(symbol: str, is_etf: bool) -> Optional[str]:
+def symbol_path(symbol: str, is_etf: str) -> Optional[str]:
     folder = "etfs" if str(is_etf).upper() == "Y" else "stocks"
     for candidate in _candidate_filenames(symbol):
         rel = f"{folder}/{candidate}.csv"
-        path = DATA_RAW / rel
-        if path.exists():
+        if (DATA_RAW / rel).exists():
             return rel
     return None
 
 
-def summarize_symbol(path_str: str, end_date: Timestamp) -> Optional[SymbolSelection]:
+def summarize_symbol(symbol: str, path_str: str, end_date: Timestamp) -> Optional[SymbolProfile]:
     path = DATA_RAW / path_str
-    df = pd.read_csv(path, usecols=["Date", "Adj Close", "Volume"], low_memory=False)
+    df = pd.read_csv(path, usecols=["Date", "Adj Close", "Volume"])
     df["Date"] = pd.to_datetime(df["Date"])
     df = df[df["Date"] <= end_date]
     df = df.dropna(subset=["Adj Close", "Volume"])
     if df.empty:
         return None
-
-    return SymbolSelection(
+    return SymbolProfile(
+        symbol=symbol,
+        is_etf=False,
         data_file=path_str,
         total_volume=float(df["Volume"].sum()),
         average_volume=float(df["Volume"].mean()),
@@ -91,9 +98,7 @@ def summarize_symbol(path_str: str, end_date: Timestamp) -> Optional[SymbolSelec
 
 
 def load_metadata() -> pd.DataFrame:
-    logger.info("Chargement des métadonnées Kaggle (%s)", DATA_RAW / "symbols_valid_meta.csv")
     meta = pd.read_csv(DATA_RAW / "symbols_valid_meta.csv")
-    # filtres décrits dans doc/schema.md
     mask = (
         (meta["Nasdaq Traded"] == "Y")
         & (meta["Test Issue"] == "N")
@@ -101,58 +106,38 @@ def load_metadata() -> pd.DataFrame:
     )
     financial_status = meta["Financial Status"].fillna("N")
     mask &= financial_status.isin(["", "N"])
-    filtered = meta[mask].copy()
-    logger.info("%s tickers admissibles après filtres NASDAQ", len(filtered))
-    return filtered
+    return meta[mask].copy()
 
 
 def attach_activity_stats(meta: pd.DataFrame, end_date: Timestamp) -> pd.DataFrame:
-    logger.info(
-        "Calcul des métriques d'activité jusqu'au %s pour %s tickers",
-        end_date.date().isoformat(),
-        len(meta),
-    )
     records = []
-    total_meta = len(meta)
-    processed = 0
-    for idx, (_, row) in enumerate(meta.iterrows(), start=1):
+    for _, row in meta.iterrows():
         rel_path = symbol_path(row["Symbol"], row["ETF"])
         if rel_path is None:
             continue
-        stats = summarize_symbol(rel_path, end_date)
+        stats = summarize_symbol(row["Symbol"], rel_path, end_date)
         if stats is None:
             continue
         record = row.to_dict()
         record.update(stats.to_dict())
         records.append(record)
-        processed = idx
-        if idx % PROGRESS_BATCH_SIZE == 0:
-            logger.info("%s/%s tickers traités", idx, total_meta)
-    df = pd.DataFrame(records)
-    if total_meta:
-        logger.info("%s/%s tickers traités", processed or total_meta, total_meta)
-    logger.info("%s tickers disposent d'une série historique exploitable", len(df))
-    return df
+    if not records:
+        raise RuntimeError("Aucun ticker valide trouvé dans les métadonnées.")
+    return pd.DataFrame(records)
 
 
 def select_top_tickers(
     enriched_meta: pd.DataFrame,
     *,
-    top_per_bucket: int = DEFAULT_TOP_PER_BUCKET,
-    min_trading_days: int = DEFAULT_MIN_TRADING_DAYS,
-    max_symbols: int = DEFAULT_MAX_SYMBOLS,
+    top_per_bucket: int,
+    min_trading_days: int,
+    max_symbols: int,
 ) -> pd.DataFrame:
     eligible = enriched_meta[enriched_meta["TradingDays"] >= min_trading_days].copy()
     if eligible.empty:
         raise ValueError(
-            "Aucun ticker ne satisfait les critères. Diminuer min_trading_days."
+            "Aucun ticker ne satisfait min_trading_days. Diminuer la contrainte."
         )
-    logger.info(
-        "%s tickers dépassent le seuil de %s séances",
-        len(eligible),
-        min_trading_days,
-    )
-
     grouped = (
         eligible.sort_values("TotalVolume", ascending=False)
         .groupby(["Listing Exchange", "Market Category"], dropna=False, sort=True)
@@ -161,46 +146,148 @@ def select_top_tickers(
     )
     if grouped.empty:
         raise ValueError("Le regroupement n'a retourné aucun ticker.")
-
     if max_symbols:
         grouped = grouped.sort_values("TotalVolume", ascending=False).head(max_symbols)
-    logger.info(
-        "%s tickers retenus après plafonnement à %s symboles",
-        len(grouped),
-        max_symbols or len(grouped),
+    grouped = grouped.sort_values(["Listing Exchange", "Market Category", "Symbol"])
+    grouped.to_csv(DATA_PROCESSED / "selected_tickers.csv", index=False)
+    print(f"[1/3] Sélection: {len(grouped)} tickers sauvegardés.")
+    return grouped
+
+
+def resolve_data_path(row: pd.Series) -> Path:
+    data_file = row.get("DataFile")
+    if isinstance(data_file, str) and data_file:
+        path = DATA_RAW / data_file
+        if path.exists():
+            return path
+    folder = "etfs" if str(row["ETF"]).upper() == "Y" else "stocks"
+    fallback = DATA_RAW / folder / f"{row['Symbol']}.csv"
+    if fallback.exists():
+        return fallback
+    raise FileNotFoundError(f"Aucun fichier trouvé pour {row['Symbol']}")
+
+
+def load_price_history(path: Path, start_date: Timestamp, end_date: Timestamp) -> pd.DataFrame:
+    df = pd.read_csv(path, usecols=["Date", "Adj Close", "Volume"])
+    df["Date"] = pd.to_datetime(df["Date"])
+    mask = (df["Date"] >= start_date) & (df["Date"] <= end_date)
+    df = df.loc[mask].sort_values("Date")
+    df = df.dropna(subset=["Adj Close"])
+    df["Adj Close"] = df["Adj Close"].astype(float)
+    df["Volume"] = df["Volume"].fillna(0).astype(float)
+    return df
+
+
+def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
+    returns = prices[["Date", "Adj Close"]].copy()
+    returns["Return"] = returns["Adj Close"].pct_change()
+    returns["Return"] = returns["Return"].replace([np.inf, -np.inf], np.nan)
+    returns["Return"] = returns["Return"].clip(lower=-0.8, upper=0.8)
+    return returns.dropna(subset=["Return"])
+
+
+def build_price_and_return_tables(
+    selection: pd.DataFrame, start_date: Timestamp, end_date: Timestamp
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    price_frames: List[pd.DataFrame] = []
+    return_frames: List[pd.DataFrame] = []
+
+    for _, row in selection.iterrows():
+        try:
+            path = resolve_data_path(row)
+        except FileNotFoundError as exc:
+            print(f"[WARN] {exc}")
+            continue
+
+        prices = load_price_history(path, start_date, end_date)
+        if prices.empty:
+            print(f"[WARN] Aucune donnée dans l'intervalle pour {row['Symbol']}")
+            continue
+
+        prices = prices.assign(
+            Symbol=row["Symbol"],
+            SecurityName=row["Security Name"],
+            MarketCategory=row["Market Category"],
+            ListingExchange=row["Listing Exchange"],
+        )
+        price_frames.append(prices)
+
+        returns = compute_returns(prices)
+        if returns.empty:
+            continue
+        returns = returns.assign(Symbol=row["Symbol"])
+        return_frames.append(returns[["Date", "Symbol", "Return"]])
+
+    if not price_frames or not return_frames:
+        raise RuntimeError("Impossible de construire les tables de prix/rendements.")
+
+    prices_all = pd.concat(price_frames, ignore_index=True)
+    prices_all["Normalized"] = prices_all.groupby("Symbol")["Adj Close"].transform(
+        lambda s: (s / s.iloc[0]) * 100 if not s.empty else s
     )
-    return grouped.sort_values(["Listing Exchange", "Market Category", "Symbol"])
+
+    returns_long = pd.concat(return_frames, ignore_index=True)
+    returns_long["Date"] = pd.to_datetime(returns_long["Date"])
+    returns_long = returns_long.sort_values(["Date", "Symbol"])
+
+    returns_wide = (
+        returns_long.pivot(index="Date", columns="Symbol", values="Return").sort_index()
+    )
+    returns_wide_full = returns_wide.dropna()
+    return prices_all, returns_long, returns_wide, returns_wide_full
 
 
-def export_selection(df: pd.DataFrame) -> None:
-    columns = [
-        "Nasdaq Traded",
-        "Symbol",
-        "Security Name",
-        "Listing Exchange",
-        "Market Category",
-        "ETF",
-        "DataFile",
-        "TradingDays",
-        "FirstDate",
-        "LastDate",
-        "TotalVolume",
-        "AverageVolume",
-    ]
-    output_path = DATA_PROCESSED / "selected_tickers.csv"
-    logger.info("Écriture de la sélection vers %s", output_path)
-    df[columns].to_csv(output_path, index=False)
+def export_prices_and_returns(
+    prices_all: pd.DataFrame,
+    returns_long: pd.DataFrame,
+    returns_wide: pd.DataFrame,
+    returns_wide_full: pd.DataFrame,
+) -> None:
+    DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
+    prices_all.to_parquet(DATA_PROCESSED / "prices.parquet", index=False)
+    returns_long.to_parquet(DATA_PROCESSED / "returns_long.parquet", index=False)
+    returns_long.to_csv(DATA_PROCESSED / "returns.csv", index=False)
+    returns_wide.to_parquet(DATA_PROCESSED / "returns_wide.parquet")
+    returns_wide_full.to_parquet(DATA_PROCESSED / "returns_wide_full.parquet")
+    unique = prices_all["Symbol"].nunique()
+    sessions = prices_all["Date"].nunique()
+    print(f"[2/3] Prix & rendements: {unique} tickers, {sessions} séances.")
+
+
+def export_statistics() -> None:
+    # Les fonctions d'analyse utilisent des caches → les vider avant recalcul
+    analysis.load_selection.cache_clear()
+    analysis.load_prices.cache_clear()
+    analysis.load_returns_long.cache_clear()
+    analysis.load_returns_wide.cache_clear()
+
+    stats = analysis.compute_descriptive_stats()
+    corr = analysis.correlation_matrix()
+    stats_path = DATA_PROCESSED / "stats_summary.parquet"
+    stats_csv = DATA_PROCESSED / "stats_summary.csv"
+    corr_path = DATA_PROCESSED / "correlation_matrix.parquet"
+
+    stats.to_parquet(stats_path, index=False)
+    stats.to_csv(stats_csv, index=False)
+    corr.to_parquet(corr_path)
+    print(f"[3/3] Statistiques exportées ({len(stats)} lignes, corr {corr.shape}).")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Sélectionne les tickers NASDAQ les plus liquides par catégorie."
+        description="Pipeline complet : sélection + rendements + stats."
+    )
+    parser.add_argument(
+        "--start-date",
+        type=Timestamp,
+        default=DEFAULT_START_DATE,
+        help="Première date incluse pour les historiques (YYYY-MM-DD).",
     )
     parser.add_argument(
         "--end-date",
         type=Timestamp,
         default=DEFAULT_END_DATE,
-        help="Dernier jour inclus pour l'historique (format YYYY-MM-DD).",
+        help="Dernière date incluse pour les historiques (YYYY-MM-DD).",
     )
     parser.add_argument(
         "--min-trading-days",
@@ -212,24 +299,21 @@ def parse_args() -> argparse.Namespace:
         "--top-per-bucket",
         type=int,
         default=DEFAULT_TOP_PER_BUCKET,
-        help="Nombre de tickers à garder par combinaison Exchange x Category.",
+        help="Nombre de tickers par combinaison Exchange x Market Category.",
     )
     parser.add_argument(
         "--max-symbols",
         type=int,
         default=DEFAULT_MAX_SYMBOLS,
-        help="Nombre maximal total de tickers conservés.",
+        help="Nombre maximum total de tickers retenus.",
     )
     return parser.parse_args()
 
 
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    args = parse_args()
+def run_pipeline(args: argparse.Namespace) -> None:
+    if args.start_date >= args.end_date:
+        raise ValueError("start_date doit être antérieure à end_date.")
+
     meta = load_metadata()
     enriched = attach_activity_stats(meta, args.end_date)
     selection = select_top_tickers(
@@ -238,11 +322,16 @@ def main() -> None:
         min_trading_days=args.min_trading_days,
         max_symbols=args.max_symbols,
     )
-    export_selection(selection)
-    print(
-        f"{len(selection)} tickers conservés (min {args.min_trading_days} séances, "
-        f"top {args.top_per_bucket} par groupe)."
+    prices_all, returns_long, returns_wide, returns_wide_full = (
+        build_price_and_return_tables(selection, args.start_date, args.end_date)
     )
+    export_prices_and_returns(prices_all, returns_long, returns_wide, returns_wide_full)
+    export_statistics()
+    print("Pipeline terminé. data/processed prêt pour le dashboard.")
+
+
+def main() -> None:
+    run_pipeline(parse_args())
 
 
 if __name__ == "__main__":

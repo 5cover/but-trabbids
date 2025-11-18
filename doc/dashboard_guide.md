@@ -4,13 +4,11 @@ Ce document sert de porte d’entrée pour toute personne qui rejoint le projet 
 
 ## 1. Vue d’ensemble du pipeline
 
-| Étape                        | Script                                      | Pourquoi ?                                                                                                   | Fichiers produits                                                |
-| ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| Sélection des tickers        | `python -m src.data_loading`                | Choisir un univers réduit mais liquide via les métadonnées Nasdaq (volumes, catégorie de marché, ETF ou non) | `data/processed/selected_tickers.csv`                            |
-| Historique prix & rendements | `python -m src.raph.rendements_journaliers` | Aligner les séries 2010‑01‑04 → 2020‑04‑01, nettoyer les prix et calculer les rendements journaliers         | `prices.parquet`, `returns_long.parquet`, `returns_wide.parquet` |
-| Statistiques descriptives    | `python -m src.mato.stats_descriptives`     | Calculer les KPI par titre (rendement, risque, volumes) + matrice de corrélation                             | `stats_summary.(csv                                              | parquet)`,`correlation_matrix.parquet` |
-| Modèle de portefeuille       | `src/analysis.py` (importé par la Dash app) | Implémenter le modèle moyenne–variance de Markowitz avec contraintes simples (poids ≥ 0, ≤ 35 %)             | Objets Python (pas de fichier)                                   |
-| Tableau de bord              | `python -m src.dashboard.app`               | Montrer visuellement prix, stats, corrélations et optimisation en direct pendant l’oral                      | Serveur Dash (port 8050)                                         |
+| Étape / bloc                 | Script                         | Pourquoi ?                                                                                                   | Fichiers produits                                                                                                 |
+| ---------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Pipeline données             | `python -m src.data_loading`   | Sélectionner les tickers liquides, construire les historiques 2010‑01‑04 → 2020‑04-01, calculer toutes les stats | `selected_tickers.csv`, `prices.parquet`, `returns_(long|wide|wide_full).parquet`, `stats_summary.(csv|parquet)`, `correlation_matrix.parquet` |
+| Modèle de portefeuille       | `src/analysis.py` (importé)    | Implémenter le modèle moyenne–variance (Markowitz, contraintes w ≥ 0 et cap configurables)                   | Objets Python consommés par le dashboard                                                              |
+| Tableau de bord              | `python -m src.dashboard.app`  | Montrer visuellement prix, stats, corrélations et optimisation en direct pendant l’oral                      | Serveur Dash (port 8050)                                                                              |
 
 > **Astuce onboarding** : si un fichier manque, relancez simplement les modules ci-dessus dans l’ordre. Ils s’appuient tous sur `src/paths.py`, donc exécutez-les depuis la racine du projet.
 
@@ -159,7 +157,7 @@ En résumé, le diagramme illustre la relation “plus on veut de rendement, plu
 
 | Question                                      | Réponse                                                                                                                                                                      |
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| “Je ne trouve pas un ticker dans le dropdown” | Relancer `python -m src.data_loading` si vous avez changé les critères, puis `python -m src.raph.rendements_journaliers`.                                                    |
+| “Je ne trouve pas un ticker dans le dropdown” | Relancer `python -m src.data_loading` (le pipeline recrée toute la base).                                                                     |
 | “Pourquoi limiter à 5 tickers ?”              | Pour garder l’interface lisible, éviter des solveurs plus lourds et rester cohérent avec l’objectif “portefeuille simple”.                                                   |
 | “Le ratio µ/σ peut-il être >10 ?”             | Oui pour des titres très spéculatifs (ex : small caps). C’est un signal d’alerte : vérifier la liquidité et éventuellement exclure ces cas lors de l’interprétation.         |
 | “Comment justifier la période 2010–2020 ?”    | L’investisseur voulait une décision avant la crise Covid, donc on coupe au 1ᵉʳ avril 2020 pour ne pas introduire d’information future.                                       |

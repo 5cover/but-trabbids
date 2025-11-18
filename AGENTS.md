@@ -2,15 +2,14 @@
 
 ## Project Structure & Module Organization
 
-`src/` contains every executable module: `data_loading.py` filters the Kaggle metadata, `raph/` turns raw prices into daily returns, `mato/` holds descriptive analytics, and `dashboard/` packages the Dash interface (`app.py`, design notes, shared paths). Keep raw downloads inside `data/raw/{stocks,etfs}`; scripts should only write curated artifacts to `data/processed/` (e.g., `selected_tickers.csv`, `returns.parquet`). Project notes stay in `doc/`, while experimental notebooks or quick utilities should live inside your module folder to avoid polluting the root.
+`src/` contient les modules exécutables. `data_loading.py` pilote désormais tout le pipeline (sélection des tickers, historique prix/rendements, stats). `dashboard/` regroupe l’app Dash (`app.py`, design notes, shared paths). Gardez les téléchargements bruts dans `data/raw/{stocks,etfs}` ; les scripts doivent uniquement écrire les artefacts nettoyés dans `data/processed/` (`selected_tickers.csv`, `prices.parquet`, etc.). Les notes vont dans `doc/`, et les utilitaires temporaires restent dans votre sous-module pour préserver la racine.
 
 ## Build and Development Commands
 
 ```sh
 python3 -m venv venv && . venv/bin/activate
 pip install -r requirements.txt
-python src/data_loading.py                    # refresh selected tickers
-python -m src.mato.stats_descriptives         # recompute KPIs
+python -m src.data_loading                  # pipeline complet (sélection + rendements + stats)
 ```
 
 Run modules with `python -m …` so relative imports stay consistent with `src/paths.py`.

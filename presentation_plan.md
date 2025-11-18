@@ -23,16 +23,15 @@
 
 ## Slide 4 – Pipeline de préparation *(2:10 – 3:00)*
 
-- Script `python -m src.raph.rendements_journaliers` :
-  - Nettoyage dates 2010-01-04 → 2020-04-01.
-  - Clipping rendements extrêmes (±80 %) pour éviter aberrations.
-  - Exports : `prices.parquet`, `returns_long.parquet`, `returns_wide.parquet`.
+- Commande unique `python -m src.data_loading` :
+  - Sélection (top volumes × Exchange/Category) → `selected_tickers.csv`.
+  - Nettoyage prix 2010-01-04 → 2020-04-01 + clipping ±80 % → `prices.parquet`, `returns_(long|wide).parquet`.
+  - Calcul des stats/corrélations → `stats_summary.(csv|parquet)`, `correlation_matrix.parquet`.
 - Montrer schéma rapide (doc/schema.md) ou rappeler architecture `data/raw → data/processed → src`.
 
 ## Slide 5 – Statistiques descriptives *(3:00 – 4:00)*
 
-- `python -m src.mato.stats_descriptives` → `stats_summary.(csv|parquet)`.
-- KPIs : μ/σ annualisés, volumes, rendement cumulatif.
+- Focus sur les fichiers produits par le pipeline (μ/σ annualisés, volumes, rendement cumulatif).
 - Exemple de résultats (AAPL, QQQ, TQQQ) avec ratio μ/σ > 1.
 - Pointer l’importance de limiter la sélection à 5 tickers pour la lisibilité (prépare la démo).
 
