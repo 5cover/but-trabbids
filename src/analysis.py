@@ -10,11 +10,7 @@ import cvxpy as cp
 import numpy as np
 import pandas as pd
 
-try:  # pragma: no cover
-    from src.paths import DATA_PROCESSED
-except ImportError:  # pragma: no cover
-    from paths import DATA_PROCESSED
-
+from .paths import DATA_PROCESSED
 
 @lru_cache(maxsize=None)
 def load_prices() -> pd.DataFrame:

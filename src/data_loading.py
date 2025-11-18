@@ -7,22 +7,24 @@ conserve les combinaisons les plus actives pour alimenter le reste du projet.
 from __future__ import annotations
 
 import argparse
+import logging
 from dataclasses import dataclass
 from typing import Iterable, Optional
 
 import pandas as pd
 from pandas import Timestamp
 
-try:  # pragma: no cover - garde la compatibilité lorsque lancé hors package
-    from .paths import DATA_PROCESSED, DATA_RAW
-except ImportError:  # pragma: no cover
-    from paths import DATA_PROCESSED, DATA_RAW
+from .paths import DATA_PROCESSED, DATA_RAW
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_END_DATE = Timestamp("2020-04-01")
 DEFAULT_MIN_TRADING_DAYS = 252 * 3  # 3 années boursières de données utiles
 DEFAULT_TOP_PER_BUCKET = 7
 DEFAULT_MAX_SYMBOLS = 49
+PROGRESS_BATCH_SIZE = 100
 
 
 @dataclass
@@ -71,7 +73,7 @@ def symbol_path(symbol: str, is_etf: bool) -> Optional[str]:
 
 def summarize_symbol(path_str: str, end_date: Timestamp) -> Optional[SymbolSelection]:
     path = DATA_RAW / path_str
-    df = pd.read_csv(path, usecols=["Date", "Adj Close", "Volume"])
+    df = pd.read_csv(path, usecols=["Date", "Adj Close", "Volume"], low_memory=False)
     df["Date"] = pd.to_datetime(df["Date"])
     df = df[df["Date"] <= end_date]
     df = df.dropna(subset=["Adj Close", "Volume"])
@@ -89,6 +91,7 @@ def summarize_symbol(path_str: str, end_date: Timestamp) -> Optional[SymbolSelec
 
 
 def load_metadata() -> pd.DataFrame:
+    logger.info("Chargement des métadonnées Kaggle (%s)", DATA_RAW / "symbols_valid_meta.csv")
     meta = pd.read_csv(DATA_RAW / "symbols_valid_meta.csv")
     # filtres décrits dans doc/schema.md
     mask = (
@@ -98,12 +101,21 @@ def load_metadata() -> pd.DataFrame:
     )
     financial_status = meta["Financial Status"].fillna("N")
     mask &= financial_status.isin(["", "N"])
-    return meta[mask].copy()
+    filtered = meta[mask].copy()
+    logger.info("%s tickers admissibles après filtres NASDAQ", len(filtered))
+    return filtered
 
 
 def attach_activity_stats(meta: pd.DataFrame, end_date: Timestamp) -> pd.DataFrame:
+    logger.info(
+        "Calcul des métriques d'activité jusqu'au %s pour %s tickers",
+        end_date.date().isoformat(),
+        len(meta),
+    )
     records = []
-    for _, row in meta.iterrows():
+    total_meta = len(meta)
+    processed = 0
+    for idx, (_, row) in enumerate(meta.iterrows(), start=1):
         rel_path = symbol_path(row["Symbol"], row["ETF"])
         if rel_path is None:
             continue
@@ -113,7 +125,14 @@ def attach_activity_stats(meta: pd.DataFrame, end_date: Timestamp) -> pd.DataFra
         record = row.to_dict()
         record.update(stats.to_dict())
         records.append(record)
-    return pd.DataFrame(records)
+        processed = idx
+        if idx % PROGRESS_BATCH_SIZE == 0:
+            logger.info("%s/%s tickers traités", idx, total_meta)
+    df = pd.DataFrame(records)
+    if total_meta:
+        logger.info("%s/%s tickers traités", processed or total_meta, total_meta)
+    logger.info("%s tickers disposent d'une série historique exploitable", len(df))
+    return df
 
 
 def select_top_tickers(
@@ -128,6 +147,11 @@ def select_top_tickers(
         raise ValueError(
             "Aucun ticker ne satisfait les critères. Diminuer min_trading_days."
         )
+    logger.info(
+        "%s tickers dépassent le seuil de %s séances",
+        len(eligible),
+        min_trading_days,
+    )
 
     grouped = (
         eligible.sort_values("TotalVolume", ascending=False)
@@ -140,6 +164,11 @@ def select_top_tickers(
 
     if max_symbols:
         grouped = grouped.sort_values("TotalVolume", ascending=False).head(max_symbols)
+    logger.info(
+        "%s tickers retenus après plafonnement à %s symboles",
+        len(grouped),
+        max_symbols or len(grouped),
+    )
     return grouped.sort_values(["Listing Exchange", "Market Category", "Symbol"])
 
 
@@ -158,7 +187,9 @@ def export_selection(df: pd.DataFrame) -> None:
         "TotalVolume",
         "AverageVolume",
     ]
-    df[columns].to_csv(DATA_PROCESSED / "selected_tickers.csv", index=False)
+    output_path = DATA_PROCESSED / "selected_tickers.csv"
+    logger.info("Écriture de la sélection vers %s", output_path)
+    df[columns].to_csv(output_path, index=False)
 
 
 def parse_args() -> argparse.Namespace:
@@ -193,6 +224,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     args = parse_args()
     meta = load_metadata()
     enriched = attach_activity_stats(meta, args.end_date)

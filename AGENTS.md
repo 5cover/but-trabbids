@@ -10,9 +10,7 @@
 python3 -m venv venv && . venv/bin/activate
 pip install -r requirements.txt
 python src/data_loading.py                    # refresh selected tickers
-python -m src.raph.rendements_journaliers     # produce returns CSV/Parquet
 python -m src.mato.stats_descriptives         # recompute KPIs
-python -m src.dashboard.app                   # Dash dev server on :8050
 ```
 
 Run modules with `python -m …` so relative imports stay consistent with `src/paths.py`.
