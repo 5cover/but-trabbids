@@ -15,14 +15,14 @@ Il souhaite s'appuyer uniquement sur les données historiques avant la crise du 
 
 Nous avons choisi le modèle moyenne–variance de Harry Markowitz (1952), aussi appelé Modern Portfolio Theory.
 
-### Pourquoi ce modèle ?
+### 2.1 Pourquoi ce modèle ?
 
 * Pas de machine learning → modèle transparent, calculable et explicable
 * Basé sur des outils statistiques classiques : moyenne, variance, covariance
 * Permet de quantifier précisément le compromis rendement / risque
 * Donne une décision optimisée, pas seulement une observation
 
-### Principe général
+### 2.2 Principe général
 
 Pour chaque action, on calcule :
 
@@ -48,7 +48,7 @@ où :
 * $R_p$ = rendement espéré du portefeuille
 * $\sigma_p$ = risque du portefeuille
 
-### Ce que permet le modèle
+### 2.3 Ce que permet le modèle
 
 * Calculer le rendement espéré d'un portefeuille
 * Calculer le risque total, y compris le risque dû à la corrélation entre les actions
@@ -152,7 +152,7 @@ Le modèle repose sur des hypothèses très discutables dans la finance réelle 
 
 Autrement dit : le modèle est très intéressant en période "normale”, mais il échoue souvent dans les situations extrêmes (crises de 2008, Covid, etc.).
 
-## Conclusion
+## 6. Conclusion
 
 Ce projet nous a permis :
 
