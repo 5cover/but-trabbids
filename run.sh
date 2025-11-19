@@ -4,10 +4,9 @@
 
 set -eu
 cd "$(dirname "${BASH_SOURCE[0]}")"
-# shellcheck source=venv/bin/activate
-. "${1-.venv}"/bin/activate
-set -x
-if ! find data/processed/ -type d -not -empty; then
-    python3 -m src.data_loading;
+if [[ $OS = 'Windows_NT' ]]; then python='py'; else python='python3'; fi
+data=data/processed
+if ! [[ -d $data && -n "$(ls -A $data)" ]]; then
+    $python -m src.data_loading;
 fi
-python3 -m src.dashboard.app
+$python -m src.dashboard.app
