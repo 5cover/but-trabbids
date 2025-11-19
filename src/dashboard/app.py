@@ -1,4 +1,8 @@
-"""Application Dash interactive pour l'oral."""
+"""Application Dash interactive pour l'oral.
+
+Les commentaires “friendly” expliquent à un lecteur externe (prof) comment
+les différents blocs se parlent : données → analyse → visualisation.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +25,8 @@ DEFAULT_SYMBOLS = ["AAPL", "QQQ", "TQQQ"]
 BACKTEST_START = pd.Timestamp("2020-01-02")
 BACKTEST_END = pd.Timestamp("2020-03-31")
 
+# --- Données “vivantes” lues depuis data/processed ---
+# On charge tout une seule fois ; Dash réutilise les objets en mémoire.
 PRICES = analysis.load_prices()
 RETURNS_WIDE = analysis.load_returns_wide()
 SELECTION = analysis.load_selection()
@@ -45,6 +51,7 @@ def color_map_for(symbols: List[str]) -> dict:
 
 
 def sanitize_selection(selected: List[str] | None):
+    """Nettoie la sélection utilisateur pour éviter toute surprise."""
     symbols: List[str] = []
     for symbol in (selected or []):
         symbol = symbol.upper()
@@ -69,6 +76,7 @@ def format_info(symbols: List[str], stats: pd.DataFrame) -> str:
 
 
 def build_price_figure(symbols: List[str], mode: str) -> go.Figure:
+    """Graphique de prix ou d'indices base 100 (même palette partout)."""
     data = PRICES[PRICES["Symbol"].isin(symbols)]
     if data.empty:
         return go.Figure()
@@ -95,6 +103,7 @@ def build_price_figure(symbols: List[str], mode: str) -> go.Figure:
 
 
 def stats_table_columns():
+    """Structure de la table KPI (utilisée telle quelle par Dash DataTable)."""
     return [
         {"name": "Ticker", "id": "Symbol"},
         {"name": "Nom", "id": "Security Name"},
@@ -180,6 +189,7 @@ def build_corr_heatmap(symbols: List[str]) -> go.Figure:
 def build_weights_chart(
     solution: analysis.PortfolioSolution, max_weight: float
 ) -> go.Figure:
+    """Rappel visuel de la contrainte de poids (cap affiché dans le titre)."""
     df = solution.weights.reset_index()
     df.columns = ["Symbol", "Weight"]
     fig = px.bar(
@@ -198,6 +208,7 @@ def build_weights_chart(
 
 
 def build_metrics(solution: analysis.PortfolioSolution) -> html.Div:
+    """Cartes KPI affichées en haut de page pour fixer les ordres de grandeur."""
     cards = [
         ("Rendement annualisé", f"{solution.expected_return_annual:.1%}"),
         ("Volatilité annualisée", f"{solution.volatility_annual:.1%}"),
@@ -279,6 +290,7 @@ def build_frontier_figure(
 
 
 def build_backtest_figure(symbols: List[str], weights: pd.Series) -> go.Figure:
+    """Comparaison visuelle optimisé vs égalitaire vs benchmark (base 100)."""
     returns = RETURNS_WIDE[symbols]
     subset = returns.loc[BACKTEST_START:BACKTEST_END].dropna()
     if subset.empty:
@@ -432,6 +444,7 @@ app.layout = html.Div(
         ),
         html.Div(id="warning-banner", className="warning"),
         html.Div(id="selection-info", className="selection-info"),
+        # Les cartes KPI sont placées juste en dessous pour “résumer” la sélection
         html.Div(id="portfolio-metrics", className="metric-strip"),
         html.Div(
             [
@@ -515,6 +528,7 @@ app.layout = html.Div(
     Input("optimize-button", "n_clicks"),
 )
 def update_dashboard(selected, price_mode, mode, target_return, max_weight, _):
+    """Cerveau du dashboard : lit les inputs et renvoie toutes les figures."""
     symbols, warning = sanitize_selection(selected)
     stats = analysis.compute_descriptive_stats(symbols)
     price_fig = build_price_figure(symbols, price_mode)
@@ -573,6 +587,7 @@ def update_dashboard(selected, price_mode, mode, target_return, max_weight, _):
     Input("portfolio-mode", "value"),
 )
 def toggle_target_slider(mode: str) -> bool:
+    """Grise le slider de rendement quand il n'est pas utilisé."""
     return mode == "min"
 
 

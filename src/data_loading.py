@@ -1,9 +1,9 @@
 """Pipeline unique pour générer toutes les données nécessaires au dashboard.
 
-Étapes exécutées séquentiellement :
-1. Sélection de l'univers de titres (metadata Nasdaq)
-2. Construction des historiques prix/rendements pour 2010-01-04 → 2020-04-01
-3. Calcul des statistiques descriptives (résumés + corrélations)
+Notes pédagogiques pour le lecteur / prof :
+- On raconte l’histoire des données en trois actes (sélection → prix/rendements → stats).
+- Chaque acte écrit explicitement ses fichiers dans `data/processed/` pour inspection.
+- Une seule commande relance l’intégralité du pipeline, donc pas de scripts à enchaîner.
 
 Commande unique : `python -m src.data_loading`
 """
@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SymbolProfile:
+    """Morceau de contexte affichable dans `selected_tickers.csv`.
+
+    On garde ces colonnes pour prouver que l’univers retenu est liquide
+    (volume total, nombre de séances, bornes temporelles…).
+    """
     symbol: str
     is_etf: bool
     data_file: str
@@ -198,6 +203,11 @@ def load_price_history(path: Path, start_date: Timestamp, end_date: Timestamp) -
 
 
 def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
+    """Convertit les prix en rendements journaliers “propres”.
+
+    Le clipping ±80 % évite que des valeurs erronées (suspension, erreurs de marché)
+    ne fassent diverger la matrice de covariance du modèle Markowitz.
+    """
     returns = prices[["Date", "Adj Close"]].copy()
     returns["Return"] = returns["Adj Close"].pct_change()
     returns["Return"] = returns["Return"].replace([np.inf, -np.inf], np.nan)
@@ -208,6 +218,7 @@ def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
 def build_price_and_return_tables(
     selection: pd.DataFrame, start_date: Timestamp, end_date: Timestamp
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    # Cette étape “bricole” toutes les tables nécessaires pour la suite.
     price_frames: List[pd.DataFrame] = []
     return_frames: List[pd.DataFrame] = []
 
@@ -341,6 +352,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
+    """Chaine les trois actes : sélection → historique → stats."""
     if args.start_date >= args.end_date:
         raise ValueError("start_date doit être antérieure à end_date.")
 

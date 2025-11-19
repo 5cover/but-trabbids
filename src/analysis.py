@@ -1,4 +1,12 @@
-"""Fonctions utilitaires pour statistiques descriptives et optimisation de portefeuille."""
+"""Fonctions utilitaires pour statistiques descriptives et optimisation de portefeuille.
+
+Ce module sert de pont entre :
+- les fichiers produits par `src.data_loading` (lecture avec cache),
+- l'app Dash (qui a besoin d'un accès simple aux KPI et au modèle Markowitz),
+- les scripts CLI éventuels.
+
+Chaque fonction est volontairement “friendly” : on explicite ce qui est calculé.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +22,10 @@ from .paths import DATA_PROCESSED
 
 @lru_cache(maxsize=None)
 def load_prices() -> pd.DataFrame:
+    """Chargement paresseux des prix normalisés.
+
+    Les caches évitent de relire plusieurs centaines de Mo à chaque Callback Dash.
+    """
     df = pd.read_parquet(DATA_PROCESSED / "prices.parquet")
     df["Date"] = pd.to_datetime(df["Date"])
     return df.sort_values(["Symbol", "Date"]).reset_index(drop=True)
@@ -39,6 +51,7 @@ def load_selection() -> pd.DataFrame:
 
 
 def compute_descriptive_stats(symbols: Iterable[str] | None = None) -> pd.DataFrame:
+    """Assemble les KPIs nécessaires aux tableaux/graphes du dashboard."""
     returns = load_returns_wide()
     if symbols:
         returns = returns[list(symbols)]
@@ -123,6 +136,7 @@ class PortfolioSolution:
 
 @dataclass
 class MarkowitzModel:
+    """Petit emballage autour de cvxpy pour garder le code Dash lisible."""
     symbols: List[str]
     returns: pd.DataFrame
     mean_daily: np.ndarray
@@ -188,6 +202,7 @@ class MarkowitzModel:
         max_weight: float | None = 0.35,
         solver=cp.CLARABEL,
     ) -> List[PortfolioSolution]:
+        """Prépare les points de la courbe bleue (frontière) affichée dans Dash."""
         annual_returns = self.mean_daily * 252
         low = float(np.percentile(annual_returns, 10))
         high = float(np.percentile(annual_returns, 90))
