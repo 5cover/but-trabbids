@@ -11,6 +11,7 @@ Commande unique : `python -m src.data_loading`
 from __future__ import annotations
 
 import argparse
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -32,6 +33,10 @@ DEFAULT_END_DATE = Timestamp("2020-04-01")
 DEFAULT_MIN_TRADING_DAYS = 252 * 3  # 3 ans utiles
 DEFAULT_TOP_PER_BUCKET = 7
 DEFAULT_MAX_SYMBOLS = 49
+PROGRESS_BATCH_SIZE = 500
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,7 +103,9 @@ def summarize_symbol(symbol: str, path_str: str, end_date: Timestamp) -> Optiona
 
 
 def load_metadata() -> pd.DataFrame:
-    meta = pd.read_csv(DATA_RAW / "symbols_valid_meta.csv")
+    meta_path = DATA_RAW / "symbols_valid_meta.csv"
+    logger.info("Chargement des métadonnées depuis %s", meta_path)
+    meta = pd.read_csv(meta_path)
     mask = (
         (meta["Nasdaq Traded"] == "Y")
         & (meta["Test Issue"] == "N")
@@ -106,12 +113,20 @@ def load_metadata() -> pd.DataFrame:
     )
     financial_status = meta["Financial Status"].fillna("N")
     mask &= financial_status.isin(["", "N"])
-    return meta[mask].copy()
+    filtered = meta[mask].copy()
+    logger.info("%s tickers admissibles après filtres", len(filtered))
+    return filtered
 
 
 def attach_activity_stats(meta: pd.DataFrame, end_date: Timestamp) -> pd.DataFrame:
+    total_meta = len(meta)
+    logger.info(
+        "Calcul des métriques d'activité jusqu'au %s pour %s tickers",
+        end_date.date().isoformat(),
+        total_meta,
+    )
     records = []
-    for _, row in meta.iterrows():
+    for idx, (_, row) in enumerate(meta.iterrows(), start=1):
         rel_path = symbol_path(row["Symbol"], row["ETF"])
         if rel_path is None:
             continue
@@ -121,9 +136,13 @@ def attach_activity_stats(meta: pd.DataFrame, end_date: Timestamp) -> pd.DataFra
         record = row.to_dict()
         record.update(stats.to_dict())
         records.append(record)
+        if total_meta and (idx % PROGRESS_BATCH_SIZE == 0 or idx == total_meta):
+            logger.info("%s/%s tickers analysés", idx, total_meta)
     if not records:
         raise RuntimeError("Aucun ticker valide trouvé dans les métadonnées.")
-    return pd.DataFrame(records)
+    df = pd.DataFrame(records)
+    logger.info("%s tickers disposent d'une série exploitable", len(df))
+    return df
 
 
 def select_top_tickers(
@@ -192,16 +211,24 @@ def build_price_and_return_tables(
     price_frames: List[pd.DataFrame] = []
     return_frames: List[pd.DataFrame] = []
 
-    for _, row in selection.iterrows():
+    total_symbols = len(selection)
+    logger.info(
+        "Construction des historiques pour %s tickers (%s → %s)",
+        total_symbols,
+        start_date.date().isoformat(),
+        end_date.date().isoformat(),
+    )
+
+    for idx, (_, row) in enumerate(selection.iterrows(), start=1):
         try:
             path = resolve_data_path(row)
         except FileNotFoundError as exc:
-            print(f"[WARN] {exc}")
+            logger.warning("%s", exc)
             continue
 
         prices = load_price_history(path, start_date, end_date)
         if prices.empty:
-            print(f"[WARN] Aucune donnée dans l'intervalle pour {row['Symbol']}")
+            logger.warning("Aucune donnée dans l'intervalle pour %s", row["Symbol"])
             continue
 
         prices = prices.assign(
@@ -217,6 +244,9 @@ def build_price_and_return_tables(
             continue
         returns = returns.assign(Symbol=row["Symbol"])
         return_frames.append(returns[["Date", "Symbol", "Return"]])
+
+        if total_symbols and (idx % PROGRESS_BATCH_SIZE == 0 or idx == total_symbols):
+            logger.info("%s/%s tickers traités pour les historiques", idx, total_symbols)
 
     if not price_frames or not return_frames:
         raise RuntimeError("Impossible de construire les tables de prix/rendements.")
@@ -331,6 +361,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     run_pipeline(parse_args())
 
 

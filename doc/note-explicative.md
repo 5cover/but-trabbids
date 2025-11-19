@@ -1,80 +1,108 @@
-# Trabbids - Understanding Stock Market Patterns
+# Projet d'analyse décisionnelle
 
-(not related to rabbids)
+Raphaël Bardini, Mattéo Pfranger, Valentin Conchis
 
-## 1 Contexte & question de recherche
+## 1. Contexte & question de recherche
 
-Un investisseur individuel veut investir sur quelques actions du NASDAQ. Il veut un portefeuille simple (3 à 10 actions max) qui offre un bon compromis entre rendement et risque, en s’appuyant uniquement sur l’historique des cours avant la crise du Covid-19.
+Un investisseur individuel souhaite constituer un petit portefeuille d'actions du NASDAQ (entre 3 et 10 titres), avec un objectif simple mais universel : obtenir un rendement intéressant sans exposer son capital à un risque excessif.
 
-Comment choisir la répartition d’un portefeuille simple d’actions du NASDAQ pour maximiser le rendement espéré tout en maîtrisant le risque, à partir des données historiques jusqu’au 1er avril 2020 ?
+Il souhaite s'appuyer uniquement sur les données historiques avant la crise du Covid-19, considérée comme une période de marché « normal ».
 
-## 2 Choix du modèle
+> **Problématique :**
+> *Comment choisir la répartition d'un portefeuille d'actions du NASDAQ pour maximiser le rendement espéré tout en maîtrisant le risque, à partir des données historiques jusqu'au 1ᵉʳ avril 2020 ?*
 
-Nous avons choisi le modèle de portefeuille moyenne–variance (type [Markowitz](https://fr.wikipedia.org/wiki/Th%C3%A9orie_moderne_du_portefeuillesimplifi%C3%A9))
+## 2. Choix du modèle
 
-- calcul des rendements
-- modélisation risque/rendement
+Nous avons choisi le modèle moyenne–variance de Harry Markowitz (1952), aussi appelé Modern Portfolio Theory.
 
-Pourquoi:
+### Pourquoi ce modèle ?
 
-- Pas de ML, juste de la statistique
-- Explicable et interprétable
-- Performant à calculer
+* Pas de machine learning → modèle transparent, calculable et explicable
+* Basé sur des outils statistiques classiques : moyenne, variance, covariance
+* Permet de quantifier précisément le compromis rendement / risque
+* Donne une décision optimisée, pas seulement une observation
 
-Donc:
+### Principe général
 
-- analyse purement statistique
-- évaluation et optimisation de positions boursières
-- le trader garde la main. le programme informe.
+Pour chaque action, on calcule :
 
-## 3 Méthodologie et traitement des données
+| Notion                         | Formule       | Interprétation                 |
+| ------------------------------ | ------------- | ------------------------------ |
+| Rendement moyen                | $\mu_i$     | Gain espéré                    |
+| Risque (volatilité)            | $\sigma_i$  | Niveau de fluctuation          |
+| Corrélation entre deux actions | $\rho_{ij}$ | Comment elles varient ensemble |
 
-### 3.1 Dataset
+Ensuite, on ne regarde plus les actions séparément, mais le portefeuille comme une combinaison pondérée des actions :
 
-[Stock Market Dataset](https://www.kaggle.com/datasets/jacksoncrow/stock-market-dataset)
+$$
+R_p = \sum_{i=1}^{n} w_i \mu_i
+$$
 
-*Historical daily prices of Nasdaq-traded stocks and ETFs*
+$$
+\sigma_p^2 = \sum_{i=1}^{n} \sum_{j=1}^{n} w_i w_j \sigma_i \sigma_j \rho_{ij}
+$$
 
-Source: `nasdaqtrader.comer` Yahoo Finance
+où :
 
-Plage temporelle : années 60 (selon les date de naissance des cours) au 1er avril 2020.
+* $w_i$ = poids du ticker dans le portefeuille
+* $R_p$ = rendement espéré du portefeuille
+* $\sigma_p$ = risque du portefeuille
 
-Contenu:
+### Ce que permet le modèle
 
-1. CSVs par ticker dans sous dossiers `stocks` ou `etfs` selon
-2. Un `symbols_valid_meta`.csv avec des les métadonnées pour chaque ticker.
+* Calculer le rendement espéré d'un portefeuille
+* Calculer le risque total, y compris le risque dû à la corrélation entre les actions
+* Trouver les poids optimaux pour un niveau de rendement souhaité
+* Visualiser la Frontière efficiente, c'est-à-dire les meilleures combinaisons possibles rendement/risque
 
-### 3.2 schéma
+Ce modèle transforme littéralement une intuition ("plus de rendement = plus de risque") en équations et décisions concrètes.
+
+## 3. Méthodologie et traitement des données
+
+### 3.1 Source des données
+
+Dataset : [Stock Market Dataset](https://www.kaggle.com/datasets/jacksoncrow/stock-market-dataset) (Kaggle)
+*Cours quotidiens historiques des actions et ETFs du NASDAQ*
+
+* CSV par ticker, répartis dans `stocks/` et `etfs/`
+* `symbols_valid_meta.csv` contenant des métadonnées descriptives
+* Période : selon les tickers, parfois depuis les années 60 → 1er avril 2020
+
+### 3.2 Description des métadonnées
 
 | Colonne              | Signification                                                                                                                                                                                  | Exemple                       | Utile pour l'analyse ?                                |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------- |
-| **Nasdaq Traded**    | Indique si le titre est coté sur le NASDAQ (`Y` = oui). Certains fichiers contiennent aussi des titres d’autres marchés (AMEX, NYSE).                                                          | `Y`                           | Oui, filtre de base (`Y` uniquement).                 |
-| **Symbol**           | Code mnémonique du titre, le ticker.                                                                                                                                                           | `AAPL`, `MSFT`, `TSLA`        | Oui, c’est l’identifiant principal.                   |
+| **Nasdaq Traded**    | Indique si le titre est coté sur le NASDAQ (`Y` = oui). Certains fichiers contiennent aussi des titres d'autres marchés (AMEX, NYSE).                                                          | `Y`                           | Oui, filtre de base (`Y` uniquement).                 |
+| **Symbol**           | Code mnémonique du titre, le ticker.                                                                                                                                                           | `AAPL`, `MSFT`, `TSLA`        | Oui, c'est l'identifiant principal.                   |
 | **Security Name**    | Nom complet de la société ou du fonds.                                                                                                                                                         | `"AAON, Inc. - Common Stock"` | Oui, utile pour visualisations et rapport.            |
-| **Listing Exchange** | Code de l’exchange physique d’origine :  <br>• `Q` → NASDAQ <br>• `N` → NYSE <br>• `A` → AMEX                                                                                                  | `Q`                           | Filtre : garder `Q` pour rester sur le NASDAQ pur.    |
+| **Listing Exchange** | Code de l'exchange physique d'origine :  <br>• `Q` → NASDAQ <br>• `N` → NYSE <br>• `A` → AMEX                                                                                                  | `Q`                           | Filtre : garder `Q` pour rester sur le NASDAQ pur.    |
 | **Market Category**  | Catégorie de marché NASDAQ :  <br>• `Q` = **Global Select Market** (grandes entreprises, les plus liquides) <br>• `G` = **Global Market** (mid-cap) <br>• `S` = **Capital Market** (small-cap) | `Q`, `G`, `S`                 | Oui, excellent critère pour équilibrer l'échantillon. |
-| **ETF**              | Indique si c’est un Exchange-Traded Fund (`Y` = oui).                                                                                                                                          | `N`                           | Oui                                                   |
-| **Round Lot Size**   | Nombre d’actions dans un lot standard (souvent 100). Sert aux traders institutionnels, pas utile ici.                                                                                          | `100.0`                       | Ignorable.                                            |
-| **Test Issue**       | `Y` si c’est un titre de test (fictif).                                                                                                                                                        | `N`                           | À exclure (`N` uniquement).                           |
+| **ETF**              | Indique si c'est un Exchange-Traded Fund (`Y` = oui).                                                                                                                                          | `N`                           | Oui                                                   |
+| **Round Lot Size**   | Nombre d'actions dans un lot standard (souvent 100). Sert aux traders institutionnels, pas utile ici.                                                                                          | `100.0`                       | Ignorable.                                            |
+| **Test Issue**       | `Y` si c'est un titre de test (fictif).                                                                                                                                                        | `N`                           | À exclure (`N` uniquement).                           |
 | **Financial Status** | État financier du titre :  <br>• `N` = normal <br>• `D` = en difficulté <br>• `E` = défaillant (delisting proche)                                                                              | `N`                           | Garder uniquement `N`.                                |
 | **CQS Symbol**       | Code utilisé dans le *Consolidated Quote System* (souvent identique à `Symbol`).                                                                                                               | `AAON`                        | Redondant.                                            |
 | **NASDAQ Symbol**    | Variante interne du ticker NASDAQ.                                                                                                                                                             | `AAON`                        | Redondant.                                            |
-| **NextShares**       | `Y` si c’est un produit “NextShares” (fonds semi-actifs).                                                                                                                                      | `N`                           | Exclure (`N`).                                        |
+| **NextShares**       | `Y` si c'est un produit "NextShares” (fonds semi-actifs).                                                                                                                                      | `N`                           | Exclure (`N`).                                        |
 
 ### 3.3 Filtrage des tickers
 
-On a plus de 8000 tickers. Pour simplifier les analyses, on a choisi une heuristique pour en sélectionner une
-cinquantaine:
+Plus de 8000 tickers au départ.
+On applique plusieurs filtres :
 
-Déjà, on élimine:
+1. Exclure :
+   * Titres non cotés au NASDAQ (`Nasdaq Traded ≠ Y`)
+   * Titres de test (`Test Issue = Y`)
+   * Titres en difficulté (`Financial Status ≠ N`)
+   * Produits NextShares
+2. Regrouper par couple (Listing Exchange, Market Category) :
+   Chaque couple représente un pan du marché (taille, liquidité, réglementation).
+3. Pour chaque groupe, sélectionner les 7 tickers ayant le volume total le plus élevé. Ce critère favorise les actions :
+   * les plus liquides
+   * les plus anciennes
+   * avec un historique complet pour une analyse fiable
 
-- les tickers non NASDAQ (donc beaucoup de ListingExchange = N, A, P, Z)
-- les tickers en difficulté financière (énorme dans les small caps)
-- les ETF NextShares (assez rares mais ça retire aussi certains entrées)
-
-Ensuite, on groupe chaque cours par couple (Listing Exchange, Market Category) et on prend les N cours au volume total (somme de la colonne volume pour chaque jour de l'existence du cours) le plus élevé.
-
-On a 7 groupes:
+On obtient finalement 49 tickers, représentatifs et exploitables.
 
 | Listing Exchange | Market Category | Nombre de tickers |
 | ---------------- | --------------- | ----------------- |
@@ -86,24 +114,49 @@ On a 7 groupes:
 | Q                | S               | 952               |
 | Z                |                 | 351               |
 
-On choisit $N=7$ ce qui nous donne 49 tickers dans notre dataset initial.
+## 4. Résultats et interprétation
 
-(Note: ça veut pas dire qu'on a 49 lignes. chaque ticker est associé à un fichier CSV avec une ligne par jour de l'existence du cours)
+Observations clés :
 
-### 3.4 Par rapport au couples (Listing Exchange, Market Category)
+* Le rendement est généralement corrélé au risque (volatilité) : les titres très performants sont aussi les plus instables.
+* Les portefeuilles diversifiés sont moins risqués que la simple moyenne du risque des actions : la corrélation entre actions permet d'atténuer le risque global.
+* Un portefeuille avec des actions non corrélées (ou faiblement corrélées) est plus efficace qu'un portefeuille avec des actions très corrélées.
+* La frontière efficiente montre clairement quelles combinaisons sont optimales, et lesquelles sont dominées.
 
-Chacune représente un pan distinct du marché : capitalisation, liquidité et réglementation.
+## 5. Limites et pistes d'amélioration
 
-Pour chaque combinaison, nous avons retenu les 7 titres au volume total cumulé le plus élevé sur toute la période disponible (jusqu’au 1ᵉʳ avril 2020).
-Ce choix privilégie les titres ayant un historique complet et une forte liquidité, assurant une meilleure comparabilité et une série temporelle plus longue pour l’analyse statistique.
+### 5.1 Limites de notre application
 
-## 4 Résultats et interprétation
+Le tableau de bord actuel permet :
 
-TBD
+* d'analyser des tickers choisis par l'utilisateur
+* de calculer un portefeuille optimisé
+* de visualiser risque, rendement, corrélation, optimisation
 
-## 5 Limites et pistes d'amélioration
+Mais il ne permet pas encore :
 
-Le modèle Markowitz est fortement critiqué dans le monde de l'analyse financière; il fait la double assumption que:
+* de proposer automatiquement le meilleur portefeuille parmi les 49 tickers
+* de comparer plusieurs portefeuilles candidats
+* d'intégrer plusieurs contraintes pratiques (frais, taxes, secteurs, ESG, etc.)
 
-- les marchés sont efficients: les prix et les rendements représentent de façon objective la réalité
-- les investisseurs agissent de manière 
+### 5.2 Limites du modèle de Markowitz
+
+Le modèle repose sur des hypothèses très discutables dans la finance réelle :
+
+| Hypothèse                                       | Limite réelle                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| Les marchés sont objectivement mesurables       | Les prix réagissent à des facteurs irrationnels (peur, euphories&hellip;) |
+| Les investisseurs sont rationnels               | Les émotions dominent souvent la prise de décision                 |
+| Les rendements suivent une distribution normale | Les crises financières violent complètement cette hypothèse        |
+| Les corrélations sont stables dans le temps     | En période de crise, toutes les actions chutent ensemble           |
+
+Autrement dit : le modèle est très intéressant en période "normale”, mais il échoue souvent dans les situations extrêmes (crises de 2008, Covid, etc.).
+
+## Conclusion
+
+Ce projet nous a permis :
+
+* de manipuler un grand jeu de données boursières réelles
+* d'appliquer un modèle statistique classique (mais puissant)
+* de concevoir une interface interactive d'aide à la décision
+* de comprendre que même les modèles mathématiques élégants&hellip; ont leurs limites dans le monde réel.
