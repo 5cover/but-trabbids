@@ -10,13 +10,14 @@ Comment choisir la répartition d’un portefeuille simple d’actions du NASDAQ
 
 ## 2 Choix du modèle
 
-- analyse descriptive
+Nous avons choisi le modèle de portefeuille moyenne–variance (type [Markowitz](https://fr.wikipedia.org/wiki/Th%C3%A9orie_moderne_du_portefeuillesimplifi%C3%A9))
+
 - calcul des rendements
-- modèle de portefeuille moyenne–variance (type Markowitz simplifié)
+- modélisation risque/rendement
 
 Pourquoi:
 
-- Pas de ML
+- Pas de ML, juste de la statistique
 - Explicable et interprétable
 - Performant à calculer
 
@@ -102,4 +103,7 @@ TBD
 
 ## 5 Limites et pistes d'amélioration
 
-TBD
+Le modèle Markowitz est fortement critiqué dans le monde de l'analyse financière; il fait la double assumption que:
+
+- les marchés sont efficients: les prix et les rendements représentent de façon objective la réalité
+- les investisseurs agissent de manière 
